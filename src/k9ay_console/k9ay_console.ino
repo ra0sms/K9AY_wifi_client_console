@@ -41,6 +41,8 @@ uint16_t start_pcf_value;
 int flag_failed_connection = 0;
 int flag_ip_updated = 0;
 int counter_for_getting_data = 0;
+int flag_push_pa = 0;
+int flag_load_resistor  = 0;
 /**************************************************/
 
 void read_from_uart (){
@@ -166,7 +168,7 @@ void get_http(String command){
 }
 
 void set_N(){
-    get_http("/socket0On");
+    get_http("/setN");
     //out1 = 0b00000000;
     out2 = 0b00000001;
     digitalWrite(latchPin, LOW);
@@ -176,7 +178,7 @@ void set_N(){
 }
 
 void set_NE(){
-    get_http("/socket1On");
+    get_http("/setNE");
     //out1 = 0b00000000;
     out2 = 0b00000010;
     digitalWrite(latchPin, LOW);
@@ -186,7 +188,7 @@ void set_NE(){
 }
 
 void set_E(){
-    get_http("/socket2On");
+    get_http("/setE");
     //out1 = 0b00000000;
     out2 = 0b00000100;
     digitalWrite(latchPin, LOW);
@@ -196,7 +198,7 @@ void set_E(){
 }
 
 void set_SE(){
-    get_http("/socket3On");
+    get_http("/setSE");
     //out1 = 0b00000000;
     out2 = 0b00001000;
     digitalWrite(latchPin, LOW);
@@ -206,7 +208,7 @@ void set_SE(){
 }
 
 void set_S(){
-    get_http("/socket4On");
+    get_http("/setS");
    // out1 = 0b00000000;
     out2 = 0b00010000;
     digitalWrite(latchPin, LOW);
@@ -216,7 +218,7 @@ void set_S(){
 }
 
 void set_SW(){
-    get_http("/socket5On");
+    get_http("/setSW");
     //out1 = 0b00000000;
     out2 = 0b00100000;
     digitalWrite(latchPin, LOW);
@@ -226,7 +228,7 @@ void set_SW(){
 }
 
 void set_W(){
-    get_http("/socket6On");
+    get_http("/setW");
     //out1 = 0b00000000;
     out2 = 0b01000000;
     digitalWrite(latchPin, LOW);
@@ -236,7 +238,7 @@ void set_W(){
 }
 
 void set_NW(){
-    get_http("/socket7On");
+    get_http("/setNW");
     //out1 = 0b00000000;
     out2 = 0b10000000;
     digitalWrite(latchPin, LOW);
@@ -246,13 +248,26 @@ void set_NW(){
 }
 
 void set_PA(){
-    get_http("/xml");
+  if (flag_push_pa == 0)
+  {
+    get_http("/setPa");
     out1 = 0b00000001;
     //out2 = 0b10000000;
     digitalWrite(latchPin, LOW);
     SPI.transfer(out1);
     SPI.transfer(out2);
     digitalWrite(latchPin, HIGH);
+    flag_push_pa = 1;
+  } else {
+    get_http("/resetPa");
+    out1 = 0b00000000;
+    digitalWrite(latchPin, LOW);
+    SPI.transfer(out1);
+    SPI.transfer(out2);
+    digitalWrite(latchPin, HIGH);
+    flag_push_pa = 0;
+  }
+    
 }
 
 void set_all_off(){
@@ -273,31 +288,38 @@ void check_buttons (int x){
   if ((start_pcf_value - x)==32)set_SW();
   if ((start_pcf_value - x)==64)set_W();
   if ((start_pcf_value - x)==128)set_NW();
-  if ((start_pcf_value - x)==256)set_PA();
+  if ((start_pcf_value - x)==256){
+    delay(300);
+    x = PCF.read16();
+    if ((start_pcf_value - x)==256) set_PA();
+  }
 }
 
 void check_rotary_switch(int x){
  switch (x){
-   case 32255:
-   case 31743:
-   case 30719:
-   case 28671:
-   case 24575:
-   case 16383: start_pcf_value = x; break;
+   case 32255: {if (flag_load_resistor != 300) {start_pcf_value = x; flag_load_resistor = 300; get_http("/set300"); break;} break;}
+   case 31743: {if (flag_load_resistor != 390) {start_pcf_value = x; flag_load_resistor = 390; get_http("/set390"); break;} break;}
+   case 30719: {if (flag_load_resistor != 430) {start_pcf_value = x; flag_load_resistor = 430; get_http("/set430"); break;} break;}
+   case 28671: {if (flag_load_resistor != 470) {start_pcf_value = x; flag_load_resistor = 470; get_http("/set470"); break;} break;}
+   case 24575: {if (flag_load_resistor != 510) {start_pcf_value = x; flag_load_resistor = 510; get_http("/set510"); break;} break;}
+   case 16383: {if (flag_load_resistor != 560) {start_pcf_value = x; flag_load_resistor = 560; get_http("/set560"); break;} break;}
  }
 }
 
 void get_data_from_server(){
   get_http("/xml");
-  if (response[32]=='1') set_N();
-  if (response[32]=='2') set_NE();
-  if (response[32]=='3') set_E();
-  if (response[32]=='4') set_SE();
-  if (response[32]=='5') set_S();
-  if (response[32]=='6') set_SW();
-  if (response[32]=='7') set_W();
-  if (response[32]=='8') set_NW();
-  if ((response[31]=='O')&&(response[32]=='F')&&(response[33]=='F')) set_all_off();
+  if ((response[31]=='N')&&(response[32]==' ')) set_N();
+  if ((response[31]=='N')&&(response[32]=='E')) set_NE();
+  if (response[31]=='E') set_E();
+  if ((response[31]=='S')&&(response[32]=='E')) set_SE();
+  if ((response[31]=='S')&&(response[32]==' ')) set_S();
+  if ((response[31]=='S')&&(response[32]=='W')) set_SW();
+  if (response[31]=='W') set_W();
+  if ((response[31]=='N')&&(response[32]=='W')) set_NW();
+  get_http("/xml");
+  if ((response[44]=='+')||(response[43]=='+')) {flag_push_pa = 0; set_PA();}
+  if ((response[44]=='<')||(response[43]=='<')) {flag_push_pa = 1; set_PA();}
+  if (((response[31]=='O')&&(response[32]=='F')&&(response[33]=='F'))||((response[31]==' ')&&(response[32]==' '))) set_all_off();
 
 }
 
@@ -366,9 +388,9 @@ void loop(void){
   read_from_uart();
   save_ip_to_eeprom();
   counter_for_getting_data++;
-  if (counter_for_getting_data == 10) {
+  if (counter_for_getting_data == 60) {
     get_data_from_server();
     counter_for_getting_data=0;
   }
-  delay(20);
+  delay(5);
 }
